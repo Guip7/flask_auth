@@ -2,10 +2,11 @@ from flask import Flask, request, jsonify
 from database import db
 from login import *
 from models.user import User
+import bcrypt
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:root@127.0.0.1:3306/app_db'
 
 db.init_app(app)
 login_manager.init_app(app)
@@ -27,7 +28,7 @@ def login():
 
         user = User.query.filter_by(username=username).first()
         
-        if user and user.password == password:
+        if user and bcrypt.checkpw(str.encode(password), str.encode(user.password)):
             # autenticar usuario
             login_user(user)
             print(current_user.is_authenticated)
@@ -41,19 +42,16 @@ def logout():
     logout_user() # Os cookies são limpados do servidor
     return jsonify({"message": "Usuario desconectado"})
 
-
-    return "Hello World"
-
 @app.route('/user', methods=['POST'])
-@login_required
 def create_user():
     data = request.json
     username = data.get("username")
     password = data.get("password")
 
     if username and password:
+        hash_password = bcrypt.hashpw(str.encode(password), bcrypt.gensalt())
         # Adicionando novo usuario no meu banco
-        user = User(username=username, password=password)
+        user = User(username=username, password=hash_password, role='user')
         db.session.add(user)
         db.session.commit()
         return jsonify({"message": "Usuario cadastrado com sucesso"})
@@ -74,6 +72,9 @@ def read_user(id):
 def update_user(id):
     data = request.json
     user = User.query.get(id) # Achar o usuario pelo numero de Id
+
+    if id != current_user.id and current_user == 'user':
+        return jsonify({"message": "Operação não permitida"}), 403
     
     if user.username and data.get("password"):
         user.password = data.get("password")
@@ -86,6 +87,9 @@ def update_user(id):
 @login_required
 def delete_user(id):
     user = User.query.get(id)
+
+    if current_user != 'admin':
+        return jsonify({"message": "Ação não permitida"})
 
     if id == current_user.id: # Usuario autorizado não pode se auto deletar
         return jsonify({"message": "Não autorizado"}), 403
