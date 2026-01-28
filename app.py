@@ -73,23 +73,26 @@ def update_user(id):
     data = request.json
     user = User.query.get(id) # Achar o usuario pelo numero de Id
 
-    if id != current_user.id and current_user == 'user':
+    if id != current_user.id and current_user.role == 'user':
         return jsonify({"message": "Operação não permitida"}), 403
-    
-    if user.username and data.get("password"):
-        user.password = data.get("password")
-        db.session.commit()
-        return jsonify({"username": f"Usuario {id} atualizado com sucesso"})
 
+    if data.get("password"):
+        hashed_passwod = bcrypt.hashpw(data.get("password").encode(), bcrypt.gensalt())
+
+        user.password = hashed_passwod.decode()
+        db.session.commit()
+        return jsonify({"message": f"Usuario {id} atualizado com sucesso"})
+    
     return jsonify({"message": "Usuario nao encontrado"}), 404
+
 
 @app.route('/user/<int:id>', methods=['DELETE'])
 @login_required
 def delete_user(id):
     user = User.query.get(id)
 
-    if current_user != 'admin':
-        return jsonify({"message": "Ação não permitida"})
+    if current_user.role != 'admin':
+        return jsonify({"message": "Ação não permitida"}), 403
 
     if id == current_user.id: # Usuario autorizado não pode se auto deletar
         return jsonify({"message": "Não autorizado"}), 403
